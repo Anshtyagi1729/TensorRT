@@ -42,6 +42,9 @@ class Tensor(object):
                     # The __iadd__ is executed followed by an assignment
                     return
 
+                # Materialize before clearing, since `value` may be a generator
+                # that reads from `attr` itself.
+                value = list(value)
                 attr.clear()
                 attr.extend(value)
             except AttributeError:

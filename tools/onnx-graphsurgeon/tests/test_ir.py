@@ -452,6 +452,83 @@ class TestNodeIO(object):
         assert len(getattr(self.tensors[0], tensor_field)) == 0
         assert getattr(new_tensor, tensor_field)[0] == self.node
 
+    @pytest.mark.parametrize(
+        "field_names", [("inputs", "outputs"), ("outputs", "inputs")]
+    )
+    def test_extend_generator(self, field_names):
+        nlist, tensor_field = self.get_lists(field_names)
+        nlist.extend(tensor for tensor in self.tensors)
+        assert list(nlist) == self.tensors
+        for tensor in self.tensors:
+            assert getattr(tensor, tensor_field) == [self.node]
+
+    @pytest.mark.parametrize(
+        "field_names", [("inputs", "outputs"), ("outputs", "inputs")]
+    )
+    def test_del_slice(self, field_names):
+        nlist, tensor_field = self.get_lists(field_names)
+        nlist.extend(self.tensors)
+        del nlist[2:5]
+        assert list(nlist) == self.tensors[:2] + self.tensors[5:]
+        for index, tensor in enumerate(self.tensors):
+            expected = [] if 2 <= index < 5 else [self.node]
+            assert getattr(tensor, tensor_field) == expected
+
+    @pytest.mark.parametrize(
+        "field_names", [("inputs", "outputs"), ("outputs", "inputs")]
+    )
+    def test_setitem_slice(self, field_names):
+        nlist, tensor_field = self.get_lists(field_names)
+        nlist.extend(self.tensors[:3])
+        new_tensors = [Variable("new_tensor_0"), Variable("new_tensor_1")]
+        nlist[1:] = (tensor for tensor in new_tensors)
+        assert list(nlist) == [self.tensors[0]] + new_tensors
+        assert getattr(self.tensors[0], tensor_field) == [self.node]
+        assert getattr(self.tensors[1], tensor_field) == []
+        assert getattr(self.tensors[2], tensor_field) == []
+        for tensor in new_tensors:
+            assert getattr(tensor, tensor_field) == [self.node]
+
+    @pytest.mark.parametrize(
+        "field_names", [("inputs", "outputs"), ("outputs", "inputs")]
+    )
+    def test_setitem_extended_slice_size_mismatch_leaves_list_unchanged(
+        self, field_names
+    ):
+        nlist, tensor_field = self.get_lists(field_names)
+        nlist.extend(self.tensors[:4])
+        with pytest.raises(ValueError):
+            nlist[::2] = [Variable("new_tensor")]
+        assert list(nlist) == self.tensors[:4]
+        for tensor in self.tensors[:4]:
+            assert getattr(tensor, tensor_field) == [self.node]
+
+    @pytest.mark.parametrize("field_name", ["inputs", "outputs"])
+    def test_node_assign_generator_over_own_list(self, field_name):
+        setattr(self.node, field_name, self.tensors[:3])
+        removed = self.tensors[1]
+        setattr(
+            self.node,
+            field_name,
+            (tensor for tensor in getattr(self.node, field_name) if tensor is not removed),
+        )
+        assert list(getattr(self.node, field_name)) == [
+            self.tensors[0],
+            self.tensors[2],
+        ]
+
+    @pytest.mark.parametrize("field_name", ["inputs", "outputs"])
+    def test_tensor_assign_generator_over_own_list(self, field_name):
+        tensor = self.tensors[0]
+        nodes = [Node(op="Dummy") for _ in range(3)]
+        setattr(tensor, field_name, nodes)
+        setattr(
+            tensor,
+            field_name,
+            (node for node in getattr(tensor, field_name) if node is not nodes[1]),
+        )
+        assert list(getattr(tensor, field_name)) == [nodes[0], nodes[2]]
+
     def test_iadd_on_node_directly(self):
         t0 = Variable("t0")
         n0 = Node("", inputs=[])

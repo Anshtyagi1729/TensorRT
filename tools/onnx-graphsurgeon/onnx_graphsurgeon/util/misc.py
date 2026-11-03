@@ -151,10 +151,31 @@ class SynchronizedList(list):
         list.remove(getattr(elem, self.field_name), self.parent_obj)
 
     def __delitem__(self, index):
+        if isinstance(index, slice):
+            removed = super().__getitem__(index)
+            super().__delitem__(index)
+            for elem in removed:
+                self._remove_from_elem(elem)
+            return
+
         self._remove_from_elem(self[index])
         super().__delitem__(index)
 
     def __setitem__(self, index, elem):
+        if isinstance(index, slice):
+            # Materialize first so that generators are only consumed once and so that
+            # the right-hand side may safely refer to this list.
+            added = list(elem)
+            removed = super().__getitem__(index)
+            # Update the list before the back-references so that an invalid assignment
+            # (e.g. a size mismatch on an extended slice) leaves everything unchanged.
+            super().__setitem__(index, added)
+            for old_elem in removed:
+                self._remove_from_elem(old_elem)
+            for new_elem in added:
+                self._add_to_elem(new_elem)
+            return
+
         self._remove_from_elem(self[index])
         super().__setitem__(index, elem)
         self._add_to_elem(elem)
@@ -164,6 +185,9 @@ class SynchronizedList(list):
         self._add_to_elem(x)
 
     def extend(self, iterable: Sequence[object]):
+        # Materialize first: a generator would otherwise be exhausted by list.extend,
+        # leaving the back-references of the new elements unset.
+        iterable = list(iterable)
         super().extend(iterable)
         for elem in iterable:
             self._add_to_elem(elem)

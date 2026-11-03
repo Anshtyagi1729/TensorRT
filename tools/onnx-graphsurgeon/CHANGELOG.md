@@ -9,6 +9,9 @@ Dates are in YYYY-MM-DD format.
 - Fixed a `TypeError` when importing a model containing a local function with a `GRAPH`-typed attribute default value.
 - Fixed a `KeyError` when importing a tensor whose data type is outside the `onnx.TensorProto.DataType` enum.
 - Report an `OnnxGraphSurgeonException` instead of `UnicodeDecodeError` when importing a model with a `STRING` or `STRINGS` attribute whose bytes are not valid UTF-8.
+- Fixed `Node.inputs`/`Node.outputs` and `Tensor.inputs`/`Tensor.outputs` losing their back-references when extended with a generator, which later caused `ValueError: list.remove(x): x not in list` when disconnecting the tensor.
+- Fixed assigning a generator over a node's or tensor's own `inputs`/`outputs` (for example `node.inputs = (t for t in node.inputs if ...)`) silently clearing the list.
+- Fixed slice deletion and slice assignment on `inputs`/`outputs` (for example `del node.inputs[1:]`) raising `AttributeError`.
 
 ## v0.6.2 (2026-05-21)
 
